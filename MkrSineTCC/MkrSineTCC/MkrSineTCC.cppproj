@@ -32,15 +32,15 @@
     <EraseKey />
     <AsfFrameworkConfig>
       <framework-data>
-        <options />
-        <configurations />
-        <files />
-        <documentation help="" />
-        <offline-documentation help="" />
-        <dependencies>
-          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.26.0" />
-        </dependencies>
-      </framework-data>
+  <options />
+  <configurations />
+  <files />
+  <documentation help="" />
+  <offline-documentation help="" />
+  <dependencies>
+    <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.39.0" />
+  </dependencies>
+</framework-data>
     </AsfFrameworkConfig>
     <avrtool>custom</avrtool>
     <avrtoolserialnumber />
@@ -296,10 +296,10 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="src\MkrSineChopperTcc0.cpp">
+    <Compile Include="src\MkrSineChopperTcc.cpp">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\MkrSineChopperTcc0.h">
+    <Compile Include="src\MkrSineChopperTcc.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\Sketch.cpp">

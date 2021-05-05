@@ -10,15 +10,13 @@
 
 #include <Arduino.h>
 
-// Arduino MKR Zero TCC0 WO0 outputs to D11 pin.
-
-class __MkrSineChopperTcc0 {
+class __MkrSineChopperTcc {
   public:
-    void start(int cyclesPerSecond, int chopsPerPhase, void (*halfPhaseCallback)() = 0);
+    void start(int cyclesPerSecond, int chopsPerPhase);
     void stop();
     void printValues();
 };
 
-extern __MkrSineChopperTcc0 MkrSineChopperTcc0;
+extern __MkrSineChopperTcc MkrSineChopperTcc;
 
 #endif /* MKRSINECHOPPERTCC0_H_ */
