@@ -32,15 +32,15 @@
     <EraseKey />
     <AsfFrameworkConfig>
       <framework-data>
-  <options />
-  <configurations />
-  <files />
-  <documentation help="" />
-  <offline-documentation help="" />
-  <dependencies>
-    <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.39.0" />
-  </dependencies>
-</framework-data>
+        <options />
+        <configurations />
+        <files />
+        <documentation help="" />
+        <offline-documentation help="" />
+        <dependencies>
+          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.39.0" />
+        </dependencies>
+      </framework-data>
     </AsfFrameworkConfig>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
@@ -272,6 +272,7 @@
     <Folder Include="src\core\preprocessor\" />
     <Folder Include="src\drivers" />
     <Folder Include="src\drivers\adc" />
+    <Folder Include="src\drivers\events" />
     <Folder Include="src\drivers\tcc" />
     <Folder Include="src\drivers\tc" />
   </ItemGroup>
@@ -373,6 +374,21 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\drivers\adc\adc_feature.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\drivers\events\events.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\drivers\events\events.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\drivers\events\events_common.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\drivers\events\events_hooks.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\drivers\events\events_hooks.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\drivers\tcc\tcc.c">

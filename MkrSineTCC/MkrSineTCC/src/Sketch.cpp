@@ -2,18 +2,22 @@
 #include <Arduino.h>
 #include "MkrSineChopperTcc.h"
 
+extern "C" void _system_events_init();
+
 extern int _handler_count;
 
 // the setup function runs once when you press reset or power the board
 void setup() 
 {
   SerialUSB.begin(115200);
-  
+
+  _system_events_init();
+    
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
 
-  int hz = 1000;
-  int chops = 6;  
+  int hz = 750;
+  int chops = 14;  
   MkrSineChopperTcc.start(hz, chops);
 }
 
