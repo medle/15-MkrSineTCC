@@ -7,10 +7,13 @@
 
 #include <Arduino.h>
 #include <math.h>
+
 #include "tcc\tcc.h"
 #include "tcc\tcc_callback.h"
 #include "events\events.h"
+
 #include "MkrSineChopperTcc.h"
+#include "MkrUtil.h"
 
 // clock speed defined in command line options
 #ifndef F_CPU
@@ -28,7 +31,7 @@ static bool _isEnabled = false;
 // TOP value used for double slope counting
 uint32_t _chopTopValue;
 
-// table of precomputed match values used as variable duty-cycle sequence
+// table of precomputed match values used as a sequence of varying duty-cycle values
 #define MAX_CHOPS_PER_HALF_CYCLE 20
 static uint32_t _chopMatchValues[MAX_CHOPS_PER_HALF_CYCLE];
 static volatile int _currentChopIndex;
@@ -36,10 +39,40 @@ static int _numChopsPerHalfCycle;
 
 #define TCC0_CHOP_CALLBACK_TYPE (enum tcc_callback)0
 
-static void changeDutyCycleCallback(struct tcc_module *const tcc);
-static void computeChopMatchValues(int chopsPerCycle);
+// local functions
+static void changeChopDutyCycleCallback(struct tcc_module *const tcc);
+static void precomputeChopMatchValues(int chopsPerCycle);
+static void configureTCC0();
+static void configureTCC2();
+static void startTimersSimultaneously();
 
-static void configure_tcc0()
+static int myError = 0;
+static int last_status = 0;
+
+void __MkrSineChopperTcc::start(int cyclesPerSecond, int chopsPerCycle)
+{
+  if(cyclesPerSecond < 1 || chopsPerCycle < 2) return;
+  if(chopsPerCycle > MAX_CHOPS_PER_HALF_CYCLE * 2) return;
+  
+  if(_isEnabled) stop();
+
+  // compute the period for TCC as clocks per chop / 2 for double slope counting
+  uint32_t clocksPerCycle = F_CPU / cyclesPerSecond;
+  _chopTopValue = clocksPerCycle / (chopsPerCycle * 2);
+  precomputeChopMatchValues(chopsPerCycle);
+ 
+  configureTCC0();
+  configureTCC2();
+  startTimersSimultaneously();
+
+  // using this simple way timers will start not at the same time
+  //tcc_enable(&_tcc0);
+  //tcc_enable(&_tcc2);
+  
+  _isEnabled = true;
+}
+
+static void configureTCC0()
 {
   _currentChopIndex = 0;
   uint32_t firstMatchValue = _chopMatchValues[_currentChopIndex];
@@ -54,15 +87,15 @@ static void configure_tcc0()
   config_tcc.compare.wave_generation = TCC_WAVE_GENERATION_DOUBLE_SLOPE_BOTTOM;
   config_tcc.compare.match[0] = firstMatchValue;
   config_tcc.pins.enable_wave_out_pin[0] = true;
-  config_tcc.pins.wave_out_pin[0]        = PIN_PA08E_TCC0_WO0; // D11 on MKR Zero 
+  config_tcc.pins.wave_out_pin[0]        = PIN_PA08E_TCC0_WO0; // D11 on MKR Zero
   config_tcc.pins.wave_out_pin_mux[0]    = MUX_PA08E_TCC0_WO0;
-  tcc_init(&_tcc0, TCC0, &config_tcc);
+  panicIf(tcc_init(&_tcc0, TCC0, &config_tcc));
 
-  tcc_register_callback(&_tcc0, changeDutyCycleCallback, TCC0_CHOP_CALLBACK_TYPE);
+  tcc_register_callback(&_tcc0, changeChopDutyCycleCallback, TCC0_CHOP_CALLBACK_TYPE);
   tcc_enable_callback(&_tcc0, TCC0_CHOP_CALLBACK_TYPE);
 }
 
-static void configure_tcc2()
+static void configureTCC2()
 {
   // single slope PWM output is active when counter is above "match value"
   struct tcc_config config_tcc;
@@ -73,65 +106,48 @@ static void configure_tcc2()
   config_tcc.pins.enable_wave_out_pin[0] = true;
   config_tcc.pins.wave_out_pin[0]        = PIN_PA16E_TCC2_WO0; // D8 on MKR Zero
   config_tcc.pins.wave_out_pin_mux[0]    = MUX_PA16E_TCC2_WO0;
-  tcc_init(&_tcc2, TCC2, &config_tcc);
+  panicIf(tcc_init(&_tcc2, TCC2, &config_tcc));
 }
 
-int error = 0;
-int last_status = 0;
-
-void __MkrSineChopperTcc::start(int cyclesPerSecond, int chopsPerCycle)
+static void startTimersSimultaneously()
 {
-  if(cyclesPerSecond < 1 || chopsPerCycle < 2) return;
-  if(chopsPerCycle > MAX_CHOPS_PER_HALF_CYCLE * 2) return;
+  struct events_resource starter_event;
+  struct events_config starter_config;
+  events_get_config_defaults(&starter_config);
+  panicIf(events_allocate(&starter_event, &starter_config));
+  panicIf(events_attach_user(&starter_event, EVSYS_ID_USER_TCC0_EV_0));
+  panicIf(events_attach_user(&starter_event, EVSYS_ID_USER_TCC2_EV_0));
   
-  if(_isEnabled) stop();
+  struct tcc_events events;
+  memset(&events, 0, sizeof(events));
+  events.on_input_event_perform_action[0] = true;
+  events.input_config[0].modify_action = true;
+  events.input_config[0].action = (tcc_event_action)TCC_EVENT0_ACTION_START;
+  
+  panicIf(tcc_enable_events(&_tcc0, &events));
+  panicIf(tcc_enable_events(&_tcc2, &events));
 
-  // compute the period for TCC as clocks per chop / 2 for double slope counting
-  uint32_t clocksPerCycle = F_CPU / cyclesPerSecond;
-  _chopTopValue = clocksPerCycle / (chopsPerCycle * 2);
-  computeChopMatchValues(chopsPerCycle);
- 
-  configure_tcc0();
-  configure_tcc2();
-  
-  //tcc_enable(&_tcc0);
-  //tcc_enable(&_tcc2);
-  
-  _isEnabled = true;
-  
-  
-   struct events_resource starter_event;
-   struct events_config starter_config;
-   events_get_config_defaults(&starter_config);
-   if(events_allocate(&starter_event, &starter_config) != STATUS_OK) error = 1;
-   if(events_attach_user(&starter_event, EVSYS_ID_USER_TCC0_EV_0) != STATUS_OK) error = 2;
-   if(events_attach_user(&starter_event, EVSYS_ID_USER_TCC2_EV_0) != STATUS_OK) error = 6;
-   
-   struct tcc_events tcc_events_config;
-   memset(&tcc_events_config, 0, sizeof(tcc_events_config));
-   tcc_events_config.on_input_event_perform_action[0] = true;
-   tcc_events_config.input_config[0].modify_action = true;
-   tcc_events_config.input_config[0].action = (tcc_event_action)TCC_EVENT0_ACTION_START;
-   
-   int status = tcc_enable_events(&_tcc0, &tcc_events_config);
-   if(status != STATUS_OK) { error = 3; last_status = status; }
+  tcc_enable(&_tcc0);
+  tcc_stop_counter(&_tcc0);
+  tcc_set_count_value(&_tcc0, 0);
 
-   status = tcc_enable_events(&_tcc2, &tcc_events_config);
-   if(status != STATUS_OK) { error = 8; last_status = status; }
-
-   tcc_enable(&_tcc0);
-   tcc_stop_counter(&_tcc0);
-   tcc_set_count_value(&_tcc0, 0);
-
-   tcc_enable(&_tcc2);
-   tcc_stop_counter(&_tcc2);
-   tcc_set_count_value(&_tcc2, 0);
-   
-   _currentChopIndex = 0;
-   
-   while(events_is_busy(&starter_event)); // wait for channel ready
-   if(events_trigger(&starter_event) != STATUS_OK) error = 4; // trigger event by software
+  tcc_enable(&_tcc2);
+  tcc_stop_counter(&_tcc2);
+  tcc_set_count_value(&_tcc2, 0);
   
+  _currentChopIndex = 0;
+
+  // trigger START event by software  
+  while(events_is_busy(&starter_event)); 
+  panicIf(events_trigger(&starter_event)); 
+
+  // cleanup   
+  while(events_is_busy(&starter_event)); 
+  //tcc_disable_events(&_tcc0, &events); // may be done only when timer is not enabled
+  //tcc_disable_events(&_tcc2, &events);
+  panicIf(events_detach_user(&starter_event, EVSYS_ID_USER_TCC0_EV_0));
+  panicIf(events_detach_user(&starter_event, EVSYS_ID_USER_TCC2_EV_0));
+  panicIf(events_release(&starter_event));
 }
 
 void __MkrSineChopperTcc::stop()
@@ -141,7 +157,7 @@ void __MkrSineChopperTcc::stop()
     
     tcc_disable(&_tcc2);
     tcc_disable(&_tcc0);
-   
+    
     tcc_disable_callback(&_tcc0, TCC0_CHOP_CALLBACK_TYPE);
     tcc_unregister_callback(&_tcc0, TCC0_CHOP_CALLBACK_TYPE);
   }
@@ -151,7 +167,11 @@ int _handler_count = 0;
 
 // This callback is called by TCC0 module at the end of each chop period, after
 // counter went up from zero to "top" and returned back down to "bottom" zero.
-static void changeDutyCycleCallback(struct tcc_module *const tcc)
+// NOTE: this handler is very time-sensitive so at the start of the MCU when USB
+// setup interrupts are active this callback may miss a call or two. Thus it is 
+// found useful to perform a blank "delay(1000)" at the start of the MCU to
+// let USB stabilize and not compete for cycles with this handler.
+static void changeChopDutyCycleCallback(struct tcc_module *const tcc)
 {
   _handler_count += 1;
   
@@ -166,7 +186,7 @@ static void changeDutyCycleCallback(struct tcc_module *const tcc)
   // the match value not for the "current" chop but for the "next" chop. 
   // This double-buffering allows to have enough time for setting new compare 
   // value in "relatively slow" callback routine avoiding wave-distortion 
-  // effects when writing occurs in race condition with the TCC counter.
+  // effects when writing occurs in "race condition" with the TCC counter.
   int nextIndex = _currentChopIndex + 1;
   if(nextIndex == _numChopsPerHalfCycle) nextIndex = 0;
   uint32_t nextMatchValue = _chopMatchValues[nextIndex];  
@@ -176,10 +196,17 @@ static void changeDutyCycleCallback(struct tcc_module *const tcc)
 // Writes an array of the "match" values for individual chops in a sequence of sine wave generation.
 // The idea is as follows: for each chop we want the time when current is on be just such as to
 // pass power equal in amount as a true sine wave generator.
-static void computeChopMatchValues(int chopsPerCycle)
+static void precomputeChopMatchValues(int chopsPerCycle)
 {
   _numChopsPerHalfCycle = chopsPerCycle / 2;
   float chopCx = PI / _numChopsPerHalfCycle; // angle of one chop in radians
+
+  // special case when there is only one chop per half-cycle:
+  // we make it a 100% square wave and not 64% as in sine-wave
+  if(_numChopsPerHalfCycle == 1) {
+    _chopMatchValues[0] = 0;
+    return;
+  }
 
   // As both half-cycles of wave are the same we recalculate only the first half-cycle,
   // the sign of the wave is handled by TCC2 "direction" signal.
@@ -211,9 +238,5 @@ void __MkrSineChopperTcc::printValues()
 
   Serial.print(" chopTOP=");
   Serial.print(_chopTopValue);
-  Serial.print(" err=");
-  Serial.print(error);
-  Serial.print(" status=");
-  Serial.print(last_status);
 }
 

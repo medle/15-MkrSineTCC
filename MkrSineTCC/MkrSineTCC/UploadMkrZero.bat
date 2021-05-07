@@ -10,11 +10,6 @@ set PROJECT_NAME=%1%
 set BIN_DIR=Release
 set DEFAULT_BIN=..ino.bin
 
-rem When MkrZero is stuck in a bootloader state, perform a direct bossac upload to bring it to normal state.
-rem set BOSSAC=C:\Users\SL\AppData\Local\Arduino15\packages\arduino\tools\bossac\1.7.0-arduino3/bossac.exe 
-rem %BOSSAC% -i -d --port=COM5 -U true -i -e -w -v Release\MkrTimer.bin -R 
-rem Exit 0
-
 rem Copy project binary to default name so arduino-cli uploader can find it
 copy %BIN_DIR%\%PROJECT_NAME%.bin %BIN_DIR%\%DEFAULT_BIN%
 IF %ERRORLEVEL% EQU 0 goto DoUpload
