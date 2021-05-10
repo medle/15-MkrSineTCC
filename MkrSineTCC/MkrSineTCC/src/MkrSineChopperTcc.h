@@ -10,9 +10,13 @@
 
 #include <Arduino.h>
 
+// Sine-wave invertor output pins on ARDUINO MKR ZERO:
+// D2: left high-side signal
+// D3: right high-side signal
+// D8: low-side signal (both left and right)
 class __MkrSineChopperTcc {
   public:
-    void start(int cyclesPerSecond, int chopsPerPhase);
+    int start(int cyclesPerSecond, int chopsPerPhase, int percentage=100);
     void stop();
     void printValues();
 };

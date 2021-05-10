@@ -5,7 +5,7 @@ rem NOTE: For this script to work from AtmelStudio change auto-generated Linker 
 rem Change "-Tflash_without_bootloader.ld" to "-Tflash_with_bootloader.ld"
 rem SL (04.07.2020)
 
-set COM_PORT=COM7
+set COM_PORT=COM3
 set PROJECT_NAME=%1%
 set BIN_DIR=Release
 set DEFAULT_BIN=..ino.bin
