@@ -11,14 +11,15 @@ set BIN_DIR=Release
 set DEFAULT_BIN=..ino.bin
 
 rem Copy project binary to default name so arduino-cli uploader can find it
-copy %BIN_DIR%\%PROJECT_NAME%.bin %BIN_DIR%\%DEFAULT_BIN%
+ls -l %BIN_DIR%\%PROJECT_NAME%.bin
+cp --verbose %BIN_DIR%\%PROJECT_NAME%.bin %BIN_DIR%\%DEFAULT_BIN%
 IF %ERRORLEVEL% EQU 0 goto DoUpload
-  Echo Failed to copy "%BIN_DIR%\%PROJECT_NAME%.BIN" into "%BIN_DIR%\%DEFAULT_BIN%". 
-  Exit 1
+Echo Failed to copy "%BIN_DIR%\%PROJECT_NAME%.BIN" into "%BIN_DIR%\%DEFAULT_BIN%". 
+Exit 1
 
 :DoUpload
 rem --log-level trace --verbose
-c:\home\apps\arduino-cli\arduino-cli.exe upload --verbose --port %COM_PORT% --input-dir %BIN_DIR% --fqbn arduino:samd:mkrzero NotUsed
+arduino-cli.exe upload --verbose --port %COM_PORT% --input-dir %BIN_DIR% --fqbn arduino:samd:mkrzero NotUsed
 IF %ERRORLEVEL% EQU 0 goto DoExit 
 echo Upload FAILED: errorlevel=%ERRORLEVEL%. 
 Exit 1

@@ -46,7 +46,8 @@ inline bool isChopCallbackUsed() { return (_numChopsPerHalfCycle > 1); }
 static void changeChopDutyCycleCallback(struct tcc_module *const tcc);
 static void precomputeChopMatchValues(int cyclesPerSecond, int chopsPerCycle, int percentage);
 static void configureTCC1();
-static void configureTCC2();
+static void configureTCC2forChopping();
+static void configureTCC2forPulsing(int percentage);
 static void startTimersSimultaneously();
 
 int __MkrSineChopperTcc::start(int cyclesPerSecond, int chopsPerCycle, int percentage)
@@ -60,7 +61,8 @@ int __MkrSineChopperTcc::start(int cyclesPerSecond, int chopsPerCycle, int perce
   precomputeChopMatchValues(cyclesPerSecond, chopsPerCycle, percentage);
  
   configureTCC1();
-  configureTCC2();
+  if(chopsPerCycle == 2) configureTCC2forPulsing(percentage);
+  else configureTCC2forChopping();
   startTimersSimultaneously();
 
   // using this simple way timers will start not at the same time
@@ -71,9 +73,10 @@ int __MkrSineChopperTcc::start(int cyclesPerSecond, int chopsPerCycle, int perce
   return 0;
 }
 
-// Configure 24-bit TCC2 as "high-side" LEFT and RIGHT signals.
+// Configure 24-bit TCC1 as "high-side" LEFT and RIGHT signals.
 static void configureTCC1()
 {
+  // above that match value there will be a signal in double slope operation
   int deadTimeCpuCycles = 50;
   uint32_t matchValue = deadTimeCpuCycles / 2;
   uint32_t periodValue = _chopTopValue * _numChopsPerHalfCycle;
@@ -100,8 +103,35 @@ static void configureTCC1()
   panicIf(tcc_init(&_tcc1, TCC1, &config_tcc));
 }
 
+static void configureTCC2forPulsing(int percentage)
+{
+  // single-slope frequency = F_CPU / (TOP + 1) so we need to subtract 
+  // one cycle from TOP to get exact match of frequency with double-slope
+  // operation of the second timer
+  uint32_t period = (_chopTopValue * 2) - 1;
+  uint32_t match = period * percentage / 100;
+
+  // single-slope operation: output active when count is greater than match value,
+  struct tcc_config config_tcc;
+  tcc_get_config_defaults(&config_tcc, TCC2);
+  config_tcc.counter.period = period;
+  config_tcc.compare.wave_generation = TCC_WAVE_GENERATION_SINGLE_SLOPE_PWM;
+
+  // we want pulse to appear right at the start of each cycle:
+  // to make output active when count is below the match value invert the output
+  //config_tcc.compare.wave_polarity[0] = TCC_WAVE_POLARITY_1;
+  config_tcc.wave_ext.invert[0] = true;
+
+  config_tcc.compare.match[0] = match;
+  config_tcc.pins.enable_wave_out_pin[0] = true;
+  config_tcc.pins.wave_out_pin[0]        = PIN_PA16E_TCC2_WO0; // D8 on MKR ZERO
+  config_tcc.pins.wave_out_pin_mux[0]    = MUX_PA16E_TCC2_WO0;
+  
+  panicIf(tcc_init(&_tcc2, TCC2, &config_tcc));
+}
+
 // Configure 16-bit TCC2 as "low-side" signal for chopping with variable duty-cycle.
-static void configureTCC2()
+static void configureTCC2forChopping()
 {
   _currentChopIndex = 0;
   uint32_t firstMatchValue = _chopMatchValues[_currentChopIndex];
@@ -185,7 +215,7 @@ void __MkrSineChopperTcc::stop()
   }
 }
 
-// This callback is called by TCC0 module at the end of each chop period, after
+// This callback is called by TCC2 module at the end of each chop period, after
 // counter went up from zero to "top" and returned back down to "bottom" zero.
 // NOTE: this handler is very time-sensitive so at the start of the MCU when USB
 // setup interrupts are active this callback may miss a call or two. Thus it is 
