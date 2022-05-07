@@ -73,12 +73,16 @@ int __MkrSineChopperTcc::start(int cyclesPerSecond, int chopsPerCycle, int perce
   return 0;
 }
 
+static int getDeadTimeCpuCycles()
+{
+  return 10;  
+}
+
 // Configure 24-bit TCC1 as "high-side" LEFT and RIGHT signals.
 static void configureTCC1()
 {
   // above that match value there will be a signal in double slope operation
-  int deadTimeCpuCycles = 50;
-  uint32_t matchValue = deadTimeCpuCycles / 2;
+  uint32_t matchValue = getDeadTimeCpuCycles() / 2;
   uint32_t periodValue = _chopTopValue * _numChopsPerHalfCycle;
   
   struct tcc_config config_tcc;
@@ -103,6 +107,7 @@ static void configureTCC1()
   panicIf(tcc_init(&_tcc1, TCC1, &config_tcc));
 }
 
+// Configure 16-bit TCC2 as "low-side" signal for single pulse with given duty-cycle.
 static void configureTCC2forPulsing(int percentage)
 {
   // single-slope frequency = F_CPU / (TOP + 1) so we need to subtract 
@@ -111,16 +116,12 @@ static void configureTCC2forPulsing(int percentage)
   uint32_t period = (_chopTopValue * 2) - 1;
   uint32_t match = period * percentage / 100;
 
-  // single-slope operation: output active when count is greater than match value,
+  // single-slope PWM mode with up counting: output active at start and cleared 
+  // on compare match, so the pulse appears at the start of each cycle
   struct tcc_config config_tcc;
   tcc_get_config_defaults(&config_tcc, TCC2);
   config_tcc.counter.period = period;
   config_tcc.compare.wave_generation = TCC_WAVE_GENERATION_SINGLE_SLOPE_PWM;
-
-  // we want pulse to appear right at the start of each cycle:
-  // to make output active when count is below the match value invert the output
-  //config_tcc.compare.wave_polarity[0] = TCC_WAVE_POLARITY_1;
-  config_tcc.wave_ext.invert[0] = true;
 
   config_tcc.compare.match[0] = match;
   config_tcc.pins.enable_wave_out_pin[0] = true;
@@ -158,7 +159,7 @@ static void configureTCC2forChopping()
   }  
 }
 
-// Start all the timers from the same clock using MCU event system.
+// Start the two timers from the same clock using MCU event system.
 static void startTimersSimultaneously()
 {
   struct events_resource eventResource;
@@ -193,8 +194,8 @@ static void startTimersSimultaneously()
 
   // cleanup   
   while(events_is_busy(&eventResource)); 
-  //tcc_disable_events(&_tcc1, &events); // may be done only when timer is not enabled
-  //tcc_disable_events(&_tcc2, &events);
+  //tcc_disable_events(&_tcc1, &events); // may be done only when timer is not enabled,
+  //tcc_disable_events(&_tcc2, &events); // tcc_reset() at stop() will do it anyway
   panicIf(events_detach_user(&eventResource, EVSYS_ID_USER_TCC1_EV_0));
   panicIf(events_detach_user(&eventResource, EVSYS_ID_USER_TCC2_EV_0));
   panicIf(events_release(&eventResource));
