@@ -13,11 +13,12 @@ static void atCycleEndCallback()
 static void restartChopper()
 {
   MkrSineChopperTcc.stop();
-  int hz = 5000;
+  int hz = 7000;
+  int dutyCycle1024 = 1023 * 25 / 100;
   int chopsPerHalfCycle = 0; // zero chops for pulsing mode
-  int dutyCycle1024 = 1023 * 2 / 100;
-  panicIf(MkrSineChopperTcc.start(
-    hz, chopsPerHalfCycle, dutyCycle1024, atCycleEndCallback));
+  expect0(
+    MkrSineChopperTcc.start(convertHertzToCycleMicroseconds(hz),
+      dutyCycle1024, chopsPerHalfCycle, atCycleEndCallback));
 }
 
 // the setup function runs once when you press reset or power the board

@@ -16,8 +16,8 @@
 // D11: low-side signal (both left and right)
 class __MkrSineChopperTcc {
   public:
-    int start(int cyclesPerSecond, int chopsPerHalfCycle, 
-      int dutyCycle1024 = 512, void (*cycleEndCallback)() = 0);
+    int start(int cycleMicroseconds, int dutyCycle1024 = 512, 
+      int chopsPerHalfCycle = 0, void (*cycleEndCallback)() = 0);
     void stop();
     void printValues();
 };

@@ -8,6 +8,24 @@
 #include <Arduino.h>
 #include "MkrUtil.h"
 
+// clock speed defined in command line options
+#ifndef F_CPU
+#define F_CPU 48000000
+#endif
+
+#define MICROS_PER_SECOND 1000000
+
+int convertHertzToCycleMicroseconds(int hertz)
+{
+  if(hertz <= 0) return 0;
+  return (MICROS_PER_SECOND / hertz);
+}
+
+int convertCycleMicrosecondsToClocksPerCycle(int cycleMicroseconds)
+{
+  return (F_CPU / MICROS_PER_SECOND) * cycleMicroseconds;
+}
+
 void blink(int numBlinks, int msDelayEach)
 {
   pinMode(LED_BUILTIN, OUTPUT);
